@@ -2,9 +2,13 @@ import os
 import settings
 import requests
 import json
-from flask import Flask, request, render_template, abort
+from flask import Flask, request, render_template
+from flask_cors import CORS
 
 app = Flask(__name__)
+
+CORS(app)
+
 api_key = os.getenv("API_KEY")
 
 BLACKLISTED_CHARACTERS = ["<", ">"]
@@ -50,8 +54,15 @@ def validate_product(form):
     return True
 
 
+def validate_category(form):
+    if form["title"]:
+        for character in BLACKLISTED_CHARACTERS:
+            if character in form["title"]:
+                return False
+
+
 @app.route("/product/<id_>", methods=["GET", "PATCH", "DELETE"])
-def category_handler_id(id_):
+def product_handler_id(id_):
     try:
         if request.method == "GET":
             response = requests.get(f"http://127.0.0.1:5001/product/{id_}")
@@ -66,7 +77,7 @@ def category_handler_id(id_):
                 if not validate_product(request.form):
                     return bad_request()
 
-                response = requests.patch(f"http://127.0.0.1:5001/product/{id_}")
+                response = requests.patch(f"http://127.0.0.1:5001/product/{id_}", data=request.form)
             elif request.method == "DELETE":
                 response = requests.delete(f"http://127.0.0.1:5001/product/{id_}")
         else:
@@ -81,6 +92,93 @@ def category_handler_id(id_):
         return service_unavailable()
 
 
+@app.route("/product", methods=["GET", "POST"])
+def product_handler():
+    try:
+        if request.method == "GET":
+            response = requests.get(f"http://127.0.0.1:5001/product")
+        elif request.method == "POST":
+            if not request.headers["API-Key"]:
+                return forbidden()
+
+            if request.headers["API-Key"] != api_key:
+                return forbidden()
+
+            if not validate_product(request.form):
+                return bad_request()
+
+            response = requests.post(f"http://127.0.0.1:5001/product", data=request.form)
+        else:
+            return method_not_allowed()
+
+    except requests.exceptions.ConnectionError:
+        return service_unavailable()
+
+    if response.status_code == 200:
+        return response.json()
+    else:
+        return service_unavailable()
+
+
+@app.route("/category/<id_>", methods=["GET", "PATCH", "DELETE"])
+def category_handler_id(id_):
+    try:
+        if request.method == "GET":
+            response = requests.get(f"http://127.0.0.1:5001/category/{id_}")
+        elif request.method == "PATCH" or request.method == "DELETE":
+            if not request.headers["API-Key"]:
+                return forbidden()
+
+            if request.headers["API-Key"] != api_key:
+                return forbidden()
+
+            if request.method == "PATCH":
+                if not validate_category(request.form):
+                    return bad_request()
+
+                response = requests.patch(f"http://127.0.0.1:5001/category/{id_}", data=request.form)
+            elif request.method == "DELETE":
+                response = requests.delete(f"http://127.0.0.1:5001/category/{id_}")
+        else:
+            return method_not_allowed()
+
+    except requests.exceptions.ConnectionError:
+        return service_unavailable()
+
+    if response.status_code == 200:
+        return response.json()
+    else:
+        return service_unavailable()
+
+
+@app.route("/category", methods=["GET", "POST"])
+def category_handler(id_):
+    try:
+        if request.method == "GET":
+            response = requests.get(f"http://127.0.0.1:5001/category")
+        elif request.method == "POST":
+            if not request.headers["API-Key"]:
+                return forbidden()
+
+            if request.headers["API-Key"] != api_key:
+                return forbidden()
+
+            if not validate_category(request.form):
+                return bad_request()
+
+            response = requests.post(f"http://127.0.0.1:5001/category", data=request.form)
+        else:
+            return method_not_allowed()
+
+    except requests.exceptions.ConnectionError:
+        return service_unavailable()
+
+    if response.status_code == 200:
+        return response.json()
+    else:
+        return service_unavailable()
+
+"""
 @app.route("/")
 def index():
     try:
@@ -103,7 +201,7 @@ def category(id_):
                                categories=requests.get(f"{settings.SERVICE_PRODUCTS}/category").json()["categories"])
     except requests.exceptions.ConnectionError:
         abort(503)
-
+"""
 
 if __name__ == '__main__':
     app.run()
